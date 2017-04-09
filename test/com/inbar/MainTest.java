@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 
 /**
  * Created by 2 on 09/04/2017.
@@ -18,7 +18,7 @@ class MainTest {
 
     @AfterEach
     void tearDown() {
-        Main.symbols = new HashMap<>();
+        Main.symbols = new LinkedHashMap<>();
     }
 
     @Test
@@ -41,8 +41,8 @@ class MainTest {
     public void testVarNoDependency() {
         int i = 5 * 2;
         int j = 5 + 2 * 5 - 9;
-        Main.parseLine("i = 5 * 2");
         Main.parseLine("j = 5 + 2 * 5 - 9");
+        Main.parseLine("i = 5 * 2");
         assertEquals(i, Main.symbols.get("i").intValue());
         assertEquals(j, Main.symbols.get("j").intValue());
     }
@@ -77,10 +77,10 @@ class MainTest {
         Main.parseLine("x = 10");
         Main.parseLine("x /= i");
 
-        assertEquals(i, Main.symbols.get("i").intValue());
-        assertEquals(j, Main.symbols.get("j").intValue());
-        assertEquals(k, Main.symbols.get("k").intValue());
-        assertEquals(x, Main.symbols.get("x").intValue());
+        assertEquals(i, Main.symbols.get("i").intValue(), "Failed to compute i += 5");
+        assertEquals(j, Main.symbols.get("j").intValue(), "Failed to compute j *= i");
+        assertEquals(k, Main.symbols.get("k").intValue(), "Failed to compute k -= i");
+        assertEquals(x, Main.symbols.get("x").intValue(), "Failed to compute x /= i");
     }
 
     @Test

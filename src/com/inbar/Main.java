@@ -8,7 +8,6 @@ public class Main {
 
     static Map<String, Integer> symbols = new LinkedHashMap<>();
     static Map<Integer, Pattern> operators = new HashMap();
-    static Pattern assignment_operators = Pattern.compile("\\+=|-=|\\*=|/=");
 
     public static void main(String[] args) {
         initOperators();
@@ -26,10 +25,11 @@ public class Main {
 
     static void initOperators() {
         // init equal operators
-        operators.put(-1,assignment_operators);
-        operators.put(0, Pattern.compile("[\\+-]"));
-        operators.put(1, Pattern.compile("[\\*/]"));
-        operators.put(2, Pattern.compile("\\+\\+[a-zA-Z]|--[a-zA-Z]|[a-zA-Z]\\+\\+|[a-zA-Z]--"));
+        operators.put(0, Pattern.compile(".*([a-zA-Z]\\+\\+|[a-zA-Z]--).*"));
+        operators.put(1, Pattern.compile("(.*?)(\\+=|-=|\\*=|/=|=)(.*)"));
+        operators.put(2, Pattern.compile("(.*[a-zA-Z0-9])([\\+-]{1})([a-zA-Z0-9].*)"));
+        operators.put(3, Pattern.compile("(.*)([\\*/])(.*)"));
+        operators.put(4, Pattern.compile("\\+\\+[a-zA-Z]|--[a-zA-Z]"));
     }
 
     static String formatResults() {
@@ -47,21 +47,7 @@ public class Main {
     }
 
     static void parseLine(String inputLine) {
-        Scanner scanner = new Scanner(inputLine);
-        String symbol = scanner.next();
-        String equalOp = scanner.next();
-        // check if it's a simple equation, or an operator
-        int val = 0;
-        if (assignment_operators.matcher(equalOp).matches()) {
-            if (symbols.get(symbol) == null)
-                throw new RuntimeException("Use of symbol that wasn't defined: "+symbol);
-            val = parseOperatorByPriority(inputLine,-1);
-        }
-        else {
-            String expression = scanner.nextLine();
-            val = parseOperatorByPriority(expression, 0);
-        }
-        symbols.put(symbol, val);
+        parseOperatorByPriority(inputLine.replace(" ",""),0);
     }
 
     private static int parseOperatorByPriority(String expression, int priority) {
@@ -69,46 +55,61 @@ public class Main {
         Pattern ops = operators.get(priority);
         if (ops == null) // no more operators to scan
             return eval(expression);
-        // find operators of this priority
-        Scanner scanner = new Scanner(expression);
-        StringBuilder left_expression = new StringBuilder(), right_expression = new StringBuilder();
-        String op = scanner.next();
-        Matcher matcher = ops.matcher(op);
-        while ((!matcher.matches()) && scanner.hasNext()) {
-            if (left_expression.length() > 0)
-                left_expression.append(" ");
-            left_expression.append(op);
-            op = scanner.next();
-            matcher = ops.matcher(op);
-        }
-        if (scanner.hasNext()) {
-            right_expression.append(scanner.nextLine());
-            int left_val = parseOperatorByPriority(left_expression.toString(), priority + 1);
-            int right_val = parseOperatorByPriority(right_expression.toString(), priority);
-            return evalOp(left_val, op, right_val);
-        }
-        else {
-            if (!matcher.matches()) {
-                if (left_expression.length() > 0)
-                    left_expression.append(" ");
-                left_expression.append(op);
-                return parseOperatorByPriority(left_expression.toString(), priority + 1);
+        // find first operator of this priority
+        Matcher matcher = ops.matcher(expression);
+        if (matcher.find()) {
+            int groups = matcher.groupCount();
+            String first_expression="", second_expression="", third_expression="";
+            switch(groups) {
+                case 3:
+                    third_expression = matcher.group(3);
+                case 2:
+                    second_expression = matcher.group(2);
+                case 1:
+                    first_expression = matcher.group(1);
+                default:
+                    break;
             }
-            else {
-                // should only be a unary operator, need to break it down
-                if (left_expression.length() > 0)
-                    throw new RuntimeException("Unrecognized expression syntax: "+expression);
-                // extract the variable
-
-                String var = op.replace("++", "").replace("--","");
-                String unary_op = op.replace(var, "");
-                int left_val = eval(var);
-                int right_val = 1;
+            int left_val, right_val;
+            if (groups == 0) {
+                // unary prefix operator
+                // update the symbol and return the new value
+                String var = expression.replace("++", "").replace("--","");
+                String unary_op = expression.replace(var, "");
+                left_val = eval(var);
+                right_val = 1;
                 int val = evalOp(left_val, unary_op, right_val);
                 symbols.put(var, val);
                 return val;
             }
+            else if (groups == 1) {
+                // unary postfix operator
+                // replace operator and symbol with current value, compute the expression then update the symbol
+                String var = first_expression.replace("++", "").replace("--","");
+                String unary_op = first_expression.replace(var, "");
+                int current_symbol_val = eval(var);
+                expression = expression.replaceFirst(first_expression.replace("+","\\+"), ""+current_symbol_val);
+                int val = parseOperatorByPriority(expression, priority);
+                int symbol_update_val = evalOp(current_symbol_val, unary_op, 1);
+                symbols.put(var, symbol_update_val);
+                return val;
+            }
+            else if (groups == 3) {
+                if (priority == 1) {// assignment
+                    right_val = parseOperatorByPriority(third_expression, priority + 1);
+                    return evalAssignment(first_expression, second_expression, right_val);
+                }
+                else {
+                    left_val = parseOperatorByPriority(first_expression, priority);
+                    right_val = parseOperatorByPriority(third_expression, priority + 1);
+                    return evalOp(left_val, second_expression, right_val);
+                }
+            }
+            else
+                throw new RuntimeException("Unsupported expression: "+expression);
         }
+        else
+            return parseOperatorByPriority(expression, priority + 1);
     }
 
     private static int eval(String expression) {
@@ -118,6 +119,8 @@ public class Main {
         }
         catch(Exception ex) {
             // expression is not a parsable number, it should be a symbol
+            if (!symbols.containsKey(expression))
+                throw new RuntimeException("Use of an undefined symbol: "+expression);
             val = symbols.get(expression);
         }
         return val;
@@ -126,21 +129,51 @@ public class Main {
     private static int evalOp(int left_val, String op, int right_val) throws RuntimeException {
         switch(op) {
             case "++":
-            case "+=":
             case "+":
                 return (left_val + right_val);
             case "--":
-            case "-=":
             case "-":
                 return (left_val - right_val);
-            case "*=":
             case "*":
                 return (left_val * right_val);
-            case "/=":
             case "/":
                 return (left_val / right_val);
             default:
                 throw new RuntimeException("Unsupported math operator: "+op);
         }
     }
+
+    private static int evalAssignment(String symbol, String op, int val) throws RuntimeException {
+        int new_val;
+        switch(op) {
+            case "=":
+                new_val = val;
+                break;
+            case "+=":
+                if (!symbols.containsKey(symbol))
+                    throw new RuntimeException("Use of an undefined symbol: "+symbol);
+                new_val = symbols.get(symbol) + val;
+                break;
+            case "-=":
+                if (!symbols.containsKey(symbol))
+                    throw new RuntimeException("Use of an undefined symbol: "+symbol);
+                new_val = symbols.get(symbol) - val;
+                break;
+            case "*=":
+                if (!symbols.containsKey(symbol))
+                    throw new RuntimeException("Use of an undefined symbol: "+symbol);
+                new_val = symbols.get(symbol) * val;
+                break;
+            case "/=":
+                if (!symbols.containsKey(symbol))
+                    throw new RuntimeException("Use of an undefined symbol: "+symbol);
+                new_val = symbols.get(symbol) / val;
+                break;
+            default:
+                throw new RuntimeException("Unsupported math operator: "+op);
+        }
+        symbols.put(symbol, new_val);
+        return new_val;
+    }
+
 }
