@@ -4,9 +4,8 @@ import java.util.*;
 
 public class Main {
 
-    private static String expression = "";
-    private static Map<String, Integer> symbols = new HashMap<>();
-    private static Map<Integer, ArrayList> operators = new HashMap();
+    static Map<String, Integer> symbols = new HashMap<>();
+    static Map<Integer, ArrayList> operators = new HashMap();
 
     public static void main(String[] args) {
         initOperators();
@@ -22,7 +21,7 @@ public class Main {
         System.out.println(formatResults());
     }
 
-    private static void initOperators() {
+    static void initOperators() {
         ArrayList<String> ops_1 = new ArrayList<>();
         ops_1.add("+");
         ops_1.add("-");
@@ -33,7 +32,7 @@ public class Main {
         operators.put(1, ops_2);
     }
 
-    private static String formatResults() {
+    static String formatResults() {
         StringBuilder results = new StringBuilder("(");
         Iterator it = symbols.entrySet().iterator();
         while (it.hasNext()) {
@@ -47,7 +46,7 @@ public class Main {
         return results.toString();
     }
 
-    private static void parseLine(String inputLine) {
+    static void parseLine(String inputLine) {
         Scanner scanner = new Scanner(inputLine);
         String symbol = scanner.next();
         scanner.next(); // skip equal sign
