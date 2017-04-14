@@ -50,7 +50,6 @@ public class StringsTransformer {
                 @Override
                 public void run() {
                     forEach(f);
-                    System.out.println("Thread "+this.hashCode()+" is running");
                 }
             }));
         }
@@ -63,7 +62,7 @@ public class StringsTransformer {
         return data;
     }
 
-    public List<String> transform2(final List<StringFunction> functions) throws
+    public List<String> transformOnItem(final List<StringFunction> functions) throws
             InterruptedException {
         List<Thread> threads = new ArrayList<Thread>();
         for (int i=0;i<data.size();i++) {
@@ -72,7 +71,6 @@ public class StringsTransformer {
             threads.add(new Thread(new Runnable() {
                 @Override
                 public void run() {
-                    System.out.println("Thread "+this.hashCode()+" is running");
                     String result = initial_value;
                     for (StringFunction f : functions) {
                         result = f.transform(result);
@@ -94,7 +92,7 @@ public class StringsTransformer {
         return data;
     }
 
-    public List<String> transform3(final List<StringFunction> functions) throws
+    public List<String> transformOnFunc(final List<StringFunction> functions) throws
             InterruptedException {
         for (final StringFunction f : functions) {
             List<Thread> threads = new ArrayList<Thread>();
@@ -104,7 +102,6 @@ public class StringsTransformer {
                 threads.add(new Thread(new Runnable() {
                     @Override
                     public void run() {
-                        System.out.println("Thread " + this.hashCode() + " is running");
                         String result = f.transform(initial_value);
                         // insert the resulting string back to the list at the same index
                         // this should be an atomic action
@@ -122,13 +119,15 @@ public class StringsTransformer {
         return data;
     }
 
-    public void printAll() {
+    public String printAll() {
+        StringBuilder out = new StringBuilder();
         data.forEach(new Consumer<String>() {
             @Override
             public void accept(String s) {
-                System.out.println(s);
+                out.append(s+"\n");
             }
         });
+        return out.toString();
     }
 
     public static interface StringFunction {
