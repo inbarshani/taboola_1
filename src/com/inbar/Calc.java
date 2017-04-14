@@ -4,7 +4,7 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class Main {
+public class Calc {
 
     static Map<String, Integer> symbols = new LinkedHashMap<>();
     static Map<Integer, Pattern> operators = new HashMap();
