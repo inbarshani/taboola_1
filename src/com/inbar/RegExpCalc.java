@@ -4,35 +4,38 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class Calc {
+public class RegExpCalc {
 
-    static Map<String, Integer> symbols = new LinkedHashMap<>();
-    static Map<Integer, Pattern> operators = new HashMap();
+    Map<String, Integer> symbols = new LinkedHashMap<>();
+    Map<Integer, Pattern> operators = new HashMap();
 
     public static void main(String[] args) {
-        initOperators();
+        RegExpCalc calc = new RegExpCalc();
 	    // input loop to capture symbols and then output results
         System.out.println("Enter a series of symbols (enter a blank input to end the series and produce the results):");
         Scanner scanner =new Scanner(System.in);
         String inputLine = scanner.nextLine();
         while(inputLine.length() > 0) {
-            parseLine(inputLine);
+            calc.parseLine(inputLine);
             inputLine = scanner.nextLine();
         }
         System.out.println("Results:");
-        System.out.println(formatResults());
+        System.out.println(calc.formatResults());
     }
 
-    static void initOperators() {
+    public RegExpCalc() {
+        initOperators();
+    }
+
+    private void initOperators() {
         // init equal operators
-        operators.put(0, Pattern.compile(".*([a-zA-Z]\\+\\+|[a-zA-Z]--).*"));
-        operators.put(1, Pattern.compile("(.*?)(\\+=|-=|\\*=|/=|=)(.*)"));
-        operators.put(2, Pattern.compile("(.*[a-zA-Z0-9])([\\+-]{1})([a-zA-Z0-9].*)"));
-        operators.put(3, Pattern.compile("(.*)([\\*/])(.*)"));
-        operators.put(4, Pattern.compile("\\+\\+[a-zA-Z]|--[a-zA-Z]"));
+        operators.put(0, Pattern.compile("(.*?)\\s(\\+=|-=|\\*=|/=|=)\\s(.*)"));
+        operators.put(1, Pattern.compile("(.*)\\s([+-])\\s(.*)"));
+        operators.put(2, Pattern.compile("(.*)\\s([*/])\\s(.*)"));
+        operators.put(3, Pattern.compile(".*[a-zA-Z]\\+\\+|[a-zA-Z]--|\\+\\+[a-zA-Z]|--[a-zA-Z].*"));
     }
 
-    static String formatResults() {
+    public String formatResults() {
         StringBuilder results = new StringBuilder("(");
         Iterator it = symbols.entrySet().iterator();
         while (it.hasNext()) {
@@ -46,11 +49,29 @@ public class Calc {
         return results.toString();
     }
 
-    static void parseLine(String inputLine) {
-        parseOperatorByPriority(inputLine.replace(" ",""),0);
+    public void parseLine(String inputLine) {
+        Map<String, List> unaryQueue = new LinkedHashMap();
+        parseOperatorByPriority(inputLine,0, unaryQueue);
+        // resolve unary ops
+        for (Map.Entry<String, List> entry : unaryQueue.entrySet()) {
+            String symbol = entry.getKey();
+            int symbol_val = symbols.get(symbol);
+            List<String> ops = entry.getValue();
+            for (String op : ops) {
+                switch(op) {
+                    case "++":
+                        symbol_val++;
+                        break;
+                    case "--":
+                        symbol_val--;
+                        break;
+                }
+            }
+            symbols.put(symbol, symbol_val);
+        }
     }
 
-    private static int parseOperatorByPriority(String expression, int priority) {
+    private int parseOperatorByPriority(String expression, int priority, Map<String, List> unaryQueue) {
         //System.out.println("evaluating expression "+expression+" for operators of priority "+priority);
         Pattern ops = operators.get(priority);
         if (ops == null) // no more operators to scan
@@ -72,36 +93,39 @@ public class Calc {
             }
             int left_val, right_val;
             if (groups == 0) {
-                // unary prefix operator
-                // update the symbol and return the new value
-                String var = expression.replace("++", "").replace("--","");
-                String unary_op = expression.replace(var, "");
-                left_val = eval(var);
-                right_val = 1;
-                int val = evalOp(left_val, unary_op, right_val);
-                symbols.put(var, val);
-                return val;
-            }
-            else if (groups == 1) {
-                // unary postfix operator
-                // replace operator and symbol with current value, compute the expression then update the symbol
-                String var = first_expression.replace("++", "").replace("--","");
-                String unary_op = first_expression.replace(var, "");
-                int current_symbol_val = eval(var);
-                expression = expression.replaceFirst(first_expression.replace("+","\\+"), ""+current_symbol_val);
-                int val = parseOperatorByPriority(expression, priority);
-                int symbol_update_val = evalOp(current_symbol_val, unary_op, 1);
-                symbols.put(var, symbol_update_val);
-                return val;
+                // unary operator
+                // return the original value (postfix) or computed value (prefix) and queue the symbol for later update
+                String symbol = expression.replace("++", "").replace("--","");
+                String unary_op = expression.replace(symbol, "");
+                // add to unaryQueue for processing after the computation is finalized
+                List<String> unaryOps = null;
+                if (unaryQueue.containsKey(symbol)) {
+                    unaryOps = unaryQueue.get(symbol);
+                }
+                else {
+                    unaryOps = new ArrayList<>();
+                    unaryQueue.put(symbol, unaryOps);
+                }
+                unaryOps.add(unary_op);
+                // return the right (post/prefix) value
+                if (expression.startsWith(symbol)) {
+                    // postfix - return the current value of the variable
+                    return eval(symbol);
+                } else {
+                    left_val = eval(symbol);
+                    right_val = 1;
+                    //
+                    return evalOp(left_val, unary_op, right_val);
+                }
             }
             else if (groups == 3) {
-                if (priority == 1) {// assignment
-                    right_val = parseOperatorByPriority(third_expression, priority + 1);
+                if (priority == 0) {// assignment
+                    right_val = parseOperatorByPriority(third_expression, priority + 1,unaryQueue);
                     return evalAssignment(first_expression, second_expression, right_val);
                 }
                 else {
-                    left_val = parseOperatorByPriority(first_expression, priority);
-                    right_val = parseOperatorByPriority(third_expression, priority + 1);
+                    left_val = parseOperatorByPriority(first_expression, priority,unaryQueue);
+                    right_val = parseOperatorByPriority(third_expression, priority + 1,unaryQueue);
                     return evalOp(left_val, second_expression, right_val);
                 }
             }
@@ -109,10 +133,10 @@ public class Calc {
                 throw new RuntimeException("Unsupported expression: "+expression);
         }
         else
-            return parseOperatorByPriority(expression, priority + 1);
+            return parseOperatorByPriority(expression, priority + 1,unaryQueue);
     }
 
-    private static int eval(String expression) {
+    private int eval(String expression) {
         int val;
         try {
             val = Integer.parseInt(expression);
@@ -126,7 +150,7 @@ public class Calc {
         return val;
     }
 
-    private static int evalOp(int left_val, String op, int right_val) throws RuntimeException {
+    private int evalOp(int left_val, String op, int right_val) throws RuntimeException {
         switch(op) {
             case "++":
             case "+":
@@ -143,7 +167,7 @@ public class Calc {
         }
     }
 
-    private static int evalAssignment(String symbol, String op, int val) throws RuntimeException {
+    private int evalAssignment(String symbol, String op, int val) throws RuntimeException {
         int new_val;
         switch(op) {
             case "=":
